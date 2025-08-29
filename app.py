@@ -156,7 +156,7 @@ with st.form("editor", clear_on_submit=False):
     # Variables block
     st.markdown("#### Variables")
     # auto-detect
-    detected = sorted(set(extract_placeholders(user_prompt) | set(extract_placeholders(sys_prompt))))
+    detected = sorted(set(extract_placeholders(user_prompt)) | set(extract_placeholders(sys_prompt)))
     st.caption("Detected from prompts: " + (", ".join(detected) if detected else "—"))
     var_rows = st.session_state.get("var_rows", [])
     # sync session var list with detected (add if missing)
