@@ -175,7 +175,8 @@ with st.form("editor", clear_on_submit=False):
             def_i = st.text_input(f"Default {i+1}", key=f"vv_{i}", value=row.get("default",""))
         new_rows.append({"name": name_i, "description": desc_i, "default": def_i})
     st.session_state["var_rows"] = new_rows
-    if st.button("➕ Add variable"):
+    add_var = st.form_submit_button("➕ Add variable")
+    if add_var:
         var_rows.append({"name": f"var_{len(var_rows)+1}", "description": "", "default": ""})
         st.session_state["var_rows"] = var_rows
         st.experimental_rerun()
