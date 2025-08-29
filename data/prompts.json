@@ -1,0 +1,60 @@
+{
+  "meta": {
+    "version": 1,
+    "updated_at": "2025-08-28T18:28:04.492495Z"
+  },
+  "templates": [
+    {
+      "id": "welcome-email",
+      "name": "Welcome Email (Friendly)",
+      "description": "Short, friendly welcome email for a new user signup.",
+      "use_case": "Email Copy",
+      "audience": "End Users",
+      "tone": "Friendly",
+      "model_family": "OpenAI",
+      "tags": [
+        "email",
+        "welcome",
+        "marketing"
+      ],
+      "owner": "templates-core",
+      "status": "approved",
+      "variables": [
+        {
+          "name": "user_name",
+          "description": "Recipient name",
+          "default": "Alex"
+        },
+        {
+          "name": "product_name",
+          "description": "The product name",
+          "default": "Sidhhanth"
+        },
+        {
+          "name": "cta_link",
+          "description": "Call to action URL",
+          "default": "https://example.com/get-started"
+        }
+      ],
+      "system": "You are a helpful and concise copywriter.",
+      "user": "Write a warm welcome email for a new user.\n\nRequirements:\n- Address the user by name: {{user_name}}\n- Mention the product: {{product_name}}\n- Include a single clear CTA to {{cta_link}}\n- Keep it under 120 words.",
+      "tools": "",
+      "safety": {
+        "do": [
+          "Keep language inclusive and positive",
+          "Be concise"
+        ],
+        "dont": [
+          "Include sensitive or personal data",
+          "Make promises about pricing"
+        ]
+      },
+      "evaluation": "Includes greeting, product mention, 1 CTA, under 120 words.",
+      "references": [
+        "https://www.hubspot.com/email-marketing"
+      ],
+      "created_at": "2025-08-28T18:28:04.492589Z",
+      "updated_at": "2025-08-28T18:28:04.492591Z"
+    }
+  ]
+}
