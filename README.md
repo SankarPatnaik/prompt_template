@@ -64,7 +64,7 @@ Follow the steps below when adding or refining a template in the repository. Eac
 Tip: When a column does not apply, leave it blank rather than forcing placeholder text. This keeps exports clean and avoids confusing downstream users.
 
 ## Sample templates
-Use these examples as starting points. Replace the placeholder variables and metadata to match your organization’s needs.
+Use these examples as starting points. Replace the placeholder variables and metadata to match your organization’s needs. The same, production-ready templates are available inside `data/prompts.json` so they can be loaded directly by the Streamlit app without additional editing.
 
 ### NLP to SQL query prompt
 ```yaml
