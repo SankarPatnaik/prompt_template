@@ -1,7 +1,7 @@
 {
   "meta": {
     "version": 1,
-    "updated_at": "2025-08-29T07:31:31.382978Z"
+    "updated_at": "2025-08-30T10:00:00Z"
   },
   "templates": [
     {
@@ -81,6 +81,159 @@
       "references": [],
       "updated_at": "2025-08-29T07:31:31.381386Z",
       "created_at": "2025-08-29T07:31:31.381509Z"
+    },
+    {
+      "id": "nlp-sql-translator",
+      "name": "NLP to SQL Translator",
+      "description": "Convert natural-language analytics questions into verified SQL queries with explicit schema checks.",
+      "use_case": "Self-service analytics",
+      "audience": "Product and analytics teams",
+      "tone": "Precise and instructive",
+      "model_family": "OpenAI",
+      "tags": [
+        "analytics",
+        "sql",
+        "translation"
+      ],
+      "owner": "data-platform",
+      "status": "approved",
+      "variables": [
+        {
+          "name": "user_request",
+          "description": "Plain-language request from the analyst",
+          "default": "Show weekly active users grouped by plan tier for the last 8 weeks"
+        },
+        {
+          "name": "available_tables",
+          "description": "Comma-separated list of tables and columns that are safe to query",
+          "default": "analytics.fact_user_activity(user_id, occurred_at, plan_tier), analytics.dim_plan(plan_tier, plan_name)"
+        }
+      ],
+      "system": "You are a senior analytics engineer. Only reference tables and columns explicitly listed in the provided catalog. If the request cannot be satisfied with the known schema, respond with an apologetic explanation and a clarifying question instead of guessing. Always validate that joins use matching keys.",
+      "user": "Follow the protocol below to translate a plain-language request into a SQL query.\n\n1. Restate the request in your own words to confirm understanding.\n2. Compare the request against the allowed catalog: {{available_tables}}.\n3. If required data is missing, stop and respond with a clarification question.\n4. When all referenced tables/columns exist, draft a single SQL query.\n5. Return only the final SQL wrapped in triple backticks after explicitly listing the assumptions you verified.\n\nAnalyst request: {{user_request}}",
+      "tools": "",
+      "safety": {
+        "do": [
+          "Confirm every column exists before using it",
+          "Explain when the catalog is insufficient"
+        ],
+        "dont": [
+          "Invent tables, columns, or filters",
+          "Modify or delete data"
+        ]
+      },
+      "evaluation": "Assistant refuses to invent schema details, includes explicit assumption checks, and outputs a single, executable SQL query inside triple backticks.",
+      "references": [
+        "https://internal.wiki/analytics-catalog"
+      ],
+      "created_at": "2025-08-30T10:00:00Z",
+      "updated_at": "2025-08-30T10:00:00Z"
+    },
+    {
+      "id": "marketing-launch-email",
+      "name": "Product Launch Email Copy",
+      "description": "Craft a launch announcement email that adheres to brand voice and factual constraints.",
+      "use_case": "Marketing communications",
+      "audience": "Existing B2B customers",
+      "tone": "Upbeat and trustworthy",
+      "model_family": "Azure OpenAI",
+      "tags": [
+        "marketing",
+        "email",
+        "product-launch"
+      ],
+      "owner": "demand-generation",
+      "status": "approved",
+      "variables": [
+        {
+          "name": "product_name",
+          "description": "Name of the product or feature",
+          "default": "InsightHub Analytics"
+        },
+        {
+          "name": "key_benefits",
+          "description": "Semicolon-separated list of validated benefits",
+          "default": "Real-time dashboards; Automated anomaly alerts; Customizable KPI views"
+        },
+        {
+          "name": "call_to_action",
+          "description": "Clear next step for the reader",
+          "default": "Book a personalized walkthrough"
+        }
+      ],
+      "system": "You are a marketing copywriter who rigorously fact-checks claims. Never promise outcomes that are not explicitly provided in the inputs. Maintain compliance with CAN-SPAM requirements and company style guidance.",
+      "user": "Draft an email announcing the launch of {{product_name}} for existing customers.\n\nMandatory structure:\n- Subject line under 60 characters.\n- Opening paragraph (max 60 words) connecting to the reader's needs.\n- Bullet list summarizing each benefit from {{key_benefits}} without adding new ones.\n- Closing paragraph reinforcing the value and leading into the CTA.\n- Call-to-action sentence directing readers to {{call_to_action}}.\n\nIf any benefit sounds unverified or unclear, ask for clarification instead of speculating.",
+      "tools": "",
+      "safety": {
+        "do": [
+          "Fact-check every benefit against the provided list",
+          "Provide accessible formatting"
+        ],
+        "dont": [
+          "Use fear-based messaging",
+          "Invent competitor comparisons"
+        ]
+      },
+      "evaluation": "Email stays under 250 words, mirrors only the provided benefits, and includes a single CTA matching the supplied copy.",
+      "references": [
+        "https://internal.wiki/brand-voice",
+        "https://www.ftc.gov/business-guidance/resources/can-spam-act-compliance-guide-business"
+      ],
+      "created_at": "2025-08-30T10:00:00Z",
+      "updated_at": "2025-08-30T10:00:00Z"
+    },
+    {
+      "id": "backend-endpoint-generator",
+      "name": "Backend API Endpoint Generator",
+      "description": "Produce a Flask endpoint with validation, documentation, and safety checks from structured requirements.",
+      "use_case": "Engineering boilerplate acceleration",
+      "audience": "Backend engineers",
+      "tone": "Technical and precise",
+      "model_family": "Anthropic",
+      "tags": [
+        "python",
+        "flask",
+        "backend"
+      ],
+      "owner": "platform-engineering",
+      "status": "approved",
+      "variables": [
+        {
+          "name": "endpoint_name",
+          "description": "Function name for the new endpoint",
+          "default": "create_order"
+        },
+        {
+          "name": "request_fields",
+          "description": "JSON payload fields with types",
+          "default": "customer_id: str; items: List[ItemPayload]"
+        },
+        {
+          "name": "success_response",
+          "description": "Schema returned when the request succeeds",
+          "default": "OrderConfirmation"
+        }
+      ],
+      "system": "You are a senior Python engineer adhering to company lint rules (black, ruff) and using Pydantic v2 models. Never invent libraries or business logic not provided. If requirements conflict or are incomplete, ask clarifying questions before producing code.",
+      "user": "Generate production-ready code for a Flask Blueprint endpoint named {{endpoint_name}}.\n\nRequirements:\n1. Define Pydantic models for the request payload (fields: {{request_fields}}) and the {{success_response}} response.\n2. Implement input validation, returning HTTP 400 with explicit error messages when validation fails.\n3. Include an inline docstring summarizing purpose, inputs, and outputs.\n4. Provide a pytest-style unit test illustrating the happy path and a validation error.\n5. Wrap code blocks separately for the endpoint module and the test file using triple backticks and file name hints (e.g., ```python filename: app/endpoints/orders.py```).\n\nIf assumptions about business rules are required, list them explicitly before the code and request confirmation.",
+      "tools": "",
+      "safety": {
+        "do": [
+          "Document any assumptions before coding",
+          "Return clear validation errors"
+        ],
+        "dont": [
+          "Silently ignore missing fields",
+          "Invent external dependencies"
+        ]
+      },
+      "evaluation": "Outputs separate, runnable code blocks, includes validation branches, and surfaces open assumptions when data is insufficient.",
+      "references": [
+        "https://internal.wiki/python-style-guide",
+        "https://docs.pydantic.dev/latest/"
+      ],
+      "created_at": "2025-08-30T10:00:00Z",
+      "updated_at": "2025-08-30T10:00:00Z"
     }
   ]
 }
