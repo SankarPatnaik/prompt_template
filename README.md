@@ -13,7 +13,7 @@ A lightweight Streamlit app to **collect, curate, version, search, and export/im
 - **Search & filter** by keyword, tags, model family, status, and owner
 - **Live preview** with a generated form to fill variables → rendered prompt preview
 - **Versioning**: every save writes a new timestamped version
-- **Import/Export** as JSON or YAML
+- **Import/Export** as JSON, YAML, or upload **raw prompts via CSV** that are auto-optimised into the framework
 - **Copy-to-clipboard** helpers for rendered prompt
 - **Local-first storage** using JSON files under `data/`
 
@@ -35,6 +35,26 @@ streamlit run app.py
 - `data/prompts.json` — main store
 - `data/versions/` — timestamped snapshots upon save
 - `data/imports/` — (created on demand) stores uploaded files for traceability
+
+## CSV import format
+
+Upload a `.csv` file from the **Import / Export** panel to bulk-create templates from existing prompt drafts. The app accepts
+the following optional columns:
+
+| Column | Description |
+| --- | --- |
+| `prompt` (or `raw_prompt`/`text`) | Free-form prompt text. Used to auto-generate the optimised System/User blocks. |
+| `name` | Friendly template name. Defaults to `Imported Prompt N`. |
+| `description` | Short summary shown in the catalog. |
+| `use_case`, `audience`, `tone`, `model_family`, `owner`, `status` | Populate the matching metadata fields. |
+| `tags` | Comma-separated list of tags. Defaults to `imported`. |
+| `system`, `user` | Provide explicit prompt blocks. If blank, the importer generates a structured version automatically. |
+| `variables` | Semi-colon separated entries in the form `name:description:default`. |
+| `tools`, `evaluation` / `evaluation_criteria`, `references`, `safety_do`, `safety_dont` | Optional advanced fields. |
+
+Each imported row is merged by template `id` (slugified name), updating existing entries when the slug matches an existing
+template. If neither `system` nor `user` columns are provided, the importer wraps the raw prompt with a best-practice workflow
+so the resulting template is immediately ready for use in the repository.
 
 ## Tips
 - Use `{{variable}}` inside your prompt text. The app builds a form for these automatically based on your variable list.

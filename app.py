@@ -1,8 +1,10 @@
 \
+import csv
+import io
 import json
 import re
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Iterable
 
 import streamlit as st
 import yaml
@@ -28,11 +30,150 @@ def token_estimate(s: str) -> int:
         return 0
     return max(1, int(len(s) / 4))
 
+
+def optimize_prompt_text(raw_prompt: str) -> tuple[str, str]:
+    """Generate a structured system/user prompt pair from free-form text."""
+    prompt = (raw_prompt or "").strip()
+    if not prompt:
+        return "", ""
+
+    system = (
+        "You are a thoughtful AI assistant. Analyse each request carefully, clarify assumptions, "
+        "and provide precise, actionable answers. When data is missing, outline how it could be "
+        "obtained and be transparent about limitations."
+    )
+    user = (
+        "Follow this workflow before answering:\n"
+        "1. Note any missing context or assumptions you must make.\n"
+        "2. Think through the request step by step and surface key metrics or considerations.\n"
+        "3. Present the final answer with a concise summary and, when relevant, bullet points for key numbers.\n\n"
+        f"User request: {prompt}"
+    )
+    return system, user
+
+
+def parse_csv_tags(value: str | None) -> List[str]:
+    if not value:
+        return ["imported"]
+    tags = [t.strip() for t in value.split(",") if t.strip()]
+    return tags or ["imported"]
+
+
+def normalise_variables(raw: str | None) -> List[Dict[str, str]]:
+    if not raw:
+        return []
+    vars_: List[Dict[str, str]] = []
+    # Accept simple CSV style "name:description:default" separated by semicolons
+    for chunk in raw.split(";"):
+        parts = [p.strip() for p in chunk.split(":")]
+        if not parts or not parts[0]:
+            continue
+        name = parts[0]
+        description = parts[1] if len(parts) > 1 else ""
+        default = parts[2] if len(parts) > 2 else ""
+        vars_.append({"name": name, "description": description, "default": default})
+    return vars_
+
+
+def build_template_from_csv_row(row: Dict[str, str], index: int) -> Dict[str, Any]:
+    """Create a template structure from a CSV row."""
+    prompt_text = next(
+        (row.get(key, "").strip() for key in ["prompt", "raw_prompt", "user", "text"] if row.get(key)),
+        "",
+    )
+    name = row.get("name") or row.get("title") or f"Imported Prompt {index + 1}"
+    description = row.get("description", "Imported from CSV")
+    system = row.get("system", "").strip()
+    user = row.get("user", "").strip()
+
+    if not system or not user:
+        gen_system, gen_user = optimize_prompt_text(prompt_text or user)
+        system = system or gen_system
+        user = user or gen_user
+
+    template: Dict[str, Any] = {
+        "id": slugify(name),
+        "name": name,
+        "description": description,
+        "use_case": row.get("use_case", "General analysis"),
+        "audience": row.get("audience", "Business stakeholders"),
+        "tone": row.get("tone", "Analytical and clear"),
+        "model_family": row.get("model_family", "OpenAI"),
+        "tags": parse_csv_tags(row.get("tags")),
+        "owner": row.get("owner", "csv-import"),
+        "status": row.get("status", "draft"),
+        "variables": normalise_variables(row.get("variables")),
+        "system": system,
+        "user": user,
+        "tools": row.get("tools", ""),
+        "evaluation": row.get("evaluation") or row.get("evaluation_criteria", ""),
+        "references": [
+            l.strip()
+            for l in (row.get("references", "").splitlines() if row.get("references") else [])
+            if l.strip()
+        ],
+        "safety": {
+            "do": [
+                s.strip()
+                for s in (row.get("safety_do", "").splitlines() if row.get("safety_do") else [])
+                if s.strip()
+            ],
+            "dont": [
+                s.strip()
+                for s in (row.get("safety_dont", "").splitlines() if row.get("safety_dont") else [])
+                if s.strip()
+            ],
+        },
+        "created_at": datetime.utcnow().isoformat() + "Z",
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+    }
+    return template
+
+
+def import_csv(file_buffer: io.BytesIO) -> Iterable[Dict[str, Any]]:
+    raw = file_buffer.read()
+    if not raw:
+        return []
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        text = raw.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    if not reader.fieldnames:
+        raise ValueError("CSV file must include a header row.")
+
+    templates = []
+    for idx, row in enumerate(reader):
+        if not any((value or "").strip() for value in row.values()):
+            continue
+        template = build_template_from_csv_row(row, idx)
+        templates.append(template)
+    return templates
+
 def find_template(store: Dict[str, Any], template_id: str) -> Dict[str, Any] | None:
     for t in store.get("templates", []):
         if t.get("id") == template_id:
             return t
     return None
+
+
+def merge_templates(store: Dict[str, Any], templates: Iterable[Dict[str, Any]]) -> tuple[int, int]:
+    store.setdefault("templates", [])
+    id_index = {tpl.get("id"): idx for idx, tpl in enumerate(store["templates"]) if tpl.get("id")}
+    new_count, upd_count = 0, 0
+    for tpl in templates:
+        tid = tpl.get("id")
+        if not tid:
+            continue
+        if tid in id_index:
+            store["templates"][id_index[tid]] = tpl
+            upd_count += 1
+        else:
+            store["templates"].append(tpl)
+            id_index[tid] = len(store["templates"]) - 1
+            new_count += 1
+    return new_count, upd_count
 
 # --------------- UI: Sidebar ---------------
 
@@ -46,38 +187,45 @@ store = storage.load()
 
 # Import/export
 with st.sidebar.expander("📤 Import / Export", expanded=False):
-    fmt = st.radio("Format", ["JSON", "YAML"], horizontal=True)
+    fmt = st.radio("Format", ["JSON", "YAML", "CSV"], horizontal=True)
     col_imp, col_exp = st.columns(2)
     with col_imp:
-        up = st.file_uploader(f"Import {fmt}", type=["json"] if fmt=="JSON" else ["yml", "yaml"])
+        if fmt == "JSON":
+            file_types = ["json"]
+        elif fmt == "YAML":
+            file_types = ["yml", "yaml"]
+        else:
+            file_types = ["csv"]
+        up = st.file_uploader(f"Import {fmt}", type=file_types)
         if up is not None:
             try:
-                raw = up.read()
-                if fmt == "JSON":
-                    imported = json.loads(raw)
+                if fmt == "CSV":
+                    templates = list(import_csv(up))
+                    if not templates:
+                        st.warning("CSV file did not contain any prompts to import.")
+                    else:
+                        new_count, upd_count = merge_templates(store, templates)
+                        storage.save(store)
+                        up.seek(0)
+                        storage.record_import(up.read(), "csv")
+                        st.success(
+                            f"Imported {new_count} new, updated {upd_count} templates from CSV (auto-optimized prompts)."
+                        )
                 else:
-                    imported = yaml.safe_load(raw)
-                if isinstance(imported, dict) and "templates" in imported:
-                    # Merge strategy: upsert by id
-                    existing_ids = {t["id"] for t in store.get("templates", [])}
-                    new_count, upd_count = 0, 0
-                    for t in imported["templates"]:
-                        if t["id"] in existing_ids:
-                            # replace existing
-                            for i, ex in enumerate(store["templates"]):
-                                if ex["id"] == t["id"]:
-                                    store["templates"][i] = t
-                                    upd_count += 1
-                                    break
-                        else:
-                            store["templates"].append(t)
-                            new_count += 1
-                    storage.save(store)
-                    # keep original file
-                    storage.record_import(raw, fmt.lower())
-                    st.success(f"Imported {new_count} new, updated {upd_count} templates.")
-                else:
-                    st.error("Invalid structure: expected an object with a 'templates' array.")
+                    raw = up.read()
+                    if fmt == "JSON":
+                        imported = json.loads(raw)
+                    else:
+                        imported = yaml.safe_load(raw)
+                    if isinstance(imported, dict) and "templates" in imported:
+                        # Merge strategy: upsert by id
+                        new_count, upd_count = merge_templates(store, imported["templates"])
+                        storage.save(store)
+                        # keep original file
+                        storage.record_import(raw, fmt.lower())
+                        st.success(f"Imported {new_count} new, updated {upd_count} templates.")
+                    else:
+                        st.error("Invalid structure: expected an object with a 'templates' array.")
             except Exception as e:
                 st.exception(e)
     with col_exp:
@@ -85,8 +233,11 @@ with st.sidebar.expander("📤 Import / Export", expanded=False):
             payload = store
             if fmt == "JSON":
                 st.download_button("Download JSON", data=json.dumps(payload, indent=2), file_name="prompts-export.json")
-            else:
+            elif fmt == "YAML":
                 st.download_button("Download YAML", data=yaml.safe_dump(payload, sort_keys=False), file_name="prompts-export.yaml")
+            else:
+                # CSV export not supported yet
+                st.info("CSV export coming soon. Use JSON or YAML for now.")
 
 # Filters
 with st.sidebar.expander("🔎 Filters", expanded=True):
