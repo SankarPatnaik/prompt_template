@@ -1,8 +1,6 @@
 \
 import json
-import os
 import re
-import time
 from datetime import datetime
 from typing import List, Dict, Any
 
@@ -10,35 +8,9 @@ import streamlit as st
 import yaml
 from slugify import slugify
 
-DATA_PATH = "data/prompts.json"
-VERSIONS_DIR = "data/versions"
-IMPORTS_DIR = "data/imports"
+from storage import PromptStorage
 
 # --------------- Utilities ---------------
-
-def _ensure_dirs():
-    os.makedirs("data", exist_ok=True)
-    os.makedirs(VERSIONS_DIR, exist_ok=True)
-    os.makedirs(IMPORTS_DIR, exist_ok=True)
-
-def load_store() -> Dict[str, Any]:
-    _ensure_dirs()
-    if not os.path.exists(DATA_PATH):
-        return {"meta": {"version": 1, "updated_at": datetime.utcnow().isoformat() + "Z"}, "templates": []}
-    with open(DATA_PATH, "r") as f:
-        return json.load(f)
-
-def save_store(store: Dict[str, Any]) -> None:
-    _ensure_dirs()
-    # version snapshot
-    ts = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
-    snap_path = os.path.join(VERSIONS_DIR, f"prompts-{ts}.json")
-    with open(snap_path, "w") as f:
-        json.dump(store, f, indent=2)
-    # current
-    store["meta"]["updated_at"] = datetime.utcnow().isoformat() + "Z"
-    with open(DATA_PATH, "w") as f:
-        json.dump(store, f, indent=2)
 
 def extract_placeholders(text: str) -> List[str]:
     # Find {{var}} patterns
@@ -69,7 +41,8 @@ st.set_page_config(page_title="GenAI Prompt Template Repository", page_icon="�
 st.sidebar.title("🧩 Prompt Repo")
 st.sidebar.caption("Curate, version, and share prompt templates.")
 
-store = load_store()
+storage = PromptStorage()
+store = storage.load()
 
 # Import/export
 with st.sidebar.expander("📤 Import / Export", expanded=False):
@@ -99,10 +72,9 @@ with st.sidebar.expander("📤 Import / Export", expanded=False):
                         else:
                             store["templates"].append(t)
                             new_count += 1
-                    save_store(store)
+                    storage.save(store)
                     # keep original file
-                    with open(os.path.join(IMPORTS_DIR, f"import-{int(time.time())}.{fmt.lower()}"), "wb") as f:
-                        f.write(raw)
+                    storage.record_import(raw, fmt.lower())
                     st.success(f"Imported {new_count} new, updated {upd_count} templates.")
                 else:
                     st.error("Invalid structure: expected an object with a 'templates' array.")
@@ -223,7 +195,7 @@ with st.form("editor", clear_on_submit=False):
                 tpl["created_at"] = datetime.utcnow().isoformat() + "Z"
                 store["templates"].append(tpl)
                 st.success(f"Created template '{name}'.")
-            save_store(store)
+            storage.save(store)
 
 # Preview panel
 st.subheader("🔍 Preview & Tryout")
@@ -302,7 +274,7 @@ for t in filtered:
         with c1:
             if st.button(f"Delete '{t['name']}'", key=f"del_{t['id']}"):
                 store["templates"] = [x for x in store["templates"] if x["id"] != t["id"]]
-                save_store(store)
+                storage.save(store)
                 st.warning(f"Deleted '{t['name']}'.")
                 st.experimental_rerun()
         with c2:
@@ -313,7 +285,7 @@ for t in filtered:
                 dup["created_at"] = datetime.utcnow().isoformat() + "Z"
                 dup["updated_at"] = datetime.utcnow().isoformat() + "Z"
                 store["templates"].append(dup)
-                save_store(store)
+                storage.save(store)
                 st.success(f"Duplicated '{t['name']}'.")
                 st.experimental_rerun()
         with c3:
